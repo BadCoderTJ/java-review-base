@@ -526,4 +526,5 @@ public static void main(String[] args)
 
 11. counting
 
-        该方法归纳元素的的数量，非常简单，不再举例说明。123
+     该方法归纳元素的的数量，非常简单，不再举例说明。
+
