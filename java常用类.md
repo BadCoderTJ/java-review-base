@@ -528,3 +528,319 @@ public static void main(String[] args)
 
      该方法归纳元素的的数量，非常简单，不再举例说明。
 
+## Stream
+
+### maven强制打包
+
+```shell
+-DskipTests=true clean package -e -U
+```
+
+**2. 流的中间操作**
+
+2.1 筛选与切片 filter：过滤流中的某些元素 limit(n)：获取n个元素 skip(n)：跳过n元素，配合limit(n)可实现分页 distinct：通过流中元素的 hashCode() 和 equals() 去除重复元素
+
+```java
+Stream<Integer> stream = Stream.of(6, 4, 6, 7, 3, 9, 8, 10, 12, 14, 14);
+Stream<Integer> newStream = stream.filter(s -> s > 5) //6 6 7 9 8 10 12 14 14
+    .distinct() //6 7 9 8 10 12 14
+    .skip(2) //9 8 10 12 14
+    .limit(2); //9 8
+newStream.forEach(System.out::println);
+```
+
+2.2 映射
+map：接收一个函数作为参数，该函数会被应用到每个元素上，并将其映射成一个新的元素。 flatMap：接收一个函数作为参数，将流中的每个值都换成另一个流，然后把所有流连接成一个流。
+
+```jsvs
+List<String> list = Arrays.asList("a,b,c", "1,2,3");
+//将每个元素转成一个新的且不带逗号的元素
+Stream<String> s1 = list.stream().map(s -> s.replaceAll(",", ""));
+s1.forEach(System.out::println); // abc  123
+Stream<String> s3 = list.stream().flatMap(s -> {
+    //将每个元素转换成一个stream
+    String[] split = s.split(",");
+    Stream<String> s2 = Arrays.stream(split);
+    return s2;
+});
+s3.forEach(System.out::println); // a b c 1 2 3
+```
+
+2.3 排序 sorted()：自然排序，流中元素需实现Comparable接口 sorted(Comparator com)：定制排序，自定义Comparator排序器
+
+```java
+List<String> list = Arrays.asList("aa", "ff", "dd");
+//String 类自身已实现Compareable接口
+list.stream().sorted().forEach(System.out::println);// aa dd ff
+Student s1 = new Student("aa", 10);
+Student s2 = new Student("bb", 20);
+Student s3 = new Student("aa", 30);
+Student s4 = new Student("dd", 40);
+List<Student> studentList = Arrays.asList(s1, s2, s3, s4);
+//自定义排序：先按姓名升序，姓名相同则按年龄升序
+studentList.stream().sorted(
+    (o1, o2) -> {
+        if (o1.getName().equals(o2.getName())) {
+            return o1.getAge() - o2.getAge();
+        } else {
+            return o1.getName().compareTo(o2.getName());
+        }
+    }
+).forEach(System.out::println);      
+```
+
+**3. 流的终止操作**
+
+3.1 匹配、聚合操作 allMatch：接收一个 Predicate 函数，当流中每个元素都符合该断言时才返回true，否则返回false noneMatch：接收一个 Predicate 函数，当流中每个元素都不符合该断言时才返回true，否则返回false anyMatch：接收一个 Predicate 函数，只要流中有一个元素满足该断言则返回true，否则返回false findFirst：返回流中第一个元素 findAny：返回流中的任意元素 count：返回流中元素的总个数 max：返回流中元素最大值 min：返回流中元素最小值
+
+```
+List<Integer> list = Arrays.asList(1, 2, 3, 4, 5);
+boolean allMatch = list.stream().allMatch(e -> e > 10); //false
+boolean noneMatch = list.stream().noneMatch(e -> e > 10); //true
+boolean anyMatch = list.stream().anyMatch(e -> e > 4);  //true
+Integer findFirst = list.stream().findFirst().get(); //1
+Integer findAny = list.stream().findAny().get(); //1
+long count = list.stream().count(); //5
+Integer max = list.stream().max(Integer::compareTo).get(); //5
+Integer min = list.stream().min(Integer::compareTo).get(); //1
+```
+
+3.2 规约操作 Optional<T> reduce(BinaryOperator<T> accumulator)：第一次执行时，accumulator函数的第一个参数为流中的第一个元素，第二个参数为流中元素的第二个元素；第二次执行时，第一个参数为第一次函数执行的结果，第二个参数为流中的第三个元素；依次类推。 T reduce(T identity, BinaryOperator<T> accumulator)：流程跟上面一样，只是第一次执行时，accumulator函数的第一个参数为identity，而第二个参数为流中的第一个元素。 `java  U reduce(U identity,BiFunction accumulator,BinaryOperator combiner)：` 在串行流(stream)中，该方法跟第二个方法一样，即第三个参数combiner不会起作用。在并行流(parallelStream)中,我们知道流被fork join出多个线程进行执行，此时每个线程的执行流程就跟第二个方法reduce(identity,accumulator)一样，而第三个参数combiner函数，则是将每个线程的执行结果当成一个新的流，然后使用第一个方法reduce(accumulator)流程进行规约。
+
+```java
+//经过测试，当元素个数小于24时，并行时线程数等于元素个数，当大于等于24时，并行时线程数为16
+List<Integer> list = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24);
+Integer v = list.stream().reduce((x1, x2) -> x1 + x2).get();
+System.out.println(v);   // 300
+Integer v1 = list.stream().reduce(10, (x1, x2) -> x1 + x2);
+System.out.println(v1);  //310
+Integer v2 = list.stream().reduce(0,
+                                  (x1, x2) -> {
+                                      System.out.println("stream accumulator: x1:" + x1 + "  x2:" + x2);
+                                      return x1 - x2;
+                                  },
+                                  (x1, x2) -> {
+                                      System.out.println("stream combiner: x1:" + x1 + "  x2:" + x2);
+                                      return x1 * x2;
+                                  });
+System.out.println(v2); // -300
+Integer v3 = list.parallelStream().reduce(0,
+                                          (x1, x2) -> {
+                                              System.out.println("parallelStream accumulator: x1:" + x1 + "  x2:" + x2);
+                                              return x1 - x2;
+                                          },
+                                          (x1, x2) -> {
+                                              System.out.println("parallelStream combiner: x1:" + x1 + "  x2:" + x2);
+                                              return x1 * x2;
+                                          });
+System.out.println(v3); //197474048
+```
+
+3.3 收集操作 collect：接收一个Collector实例，将流中元素收集成另外一个数据结构。 Collector<T, A, R> 是一个接口，有以下5个抽象方法： Supplier supplier()：创建一个结果容器A BiConsumer<A, T> accumulator()：消费型接口，第一个参数为容器A，第二个参数为流中元素T。 BinaryOperator combiner()：函数接口，该参数的作用跟上一个方法(reduce)中的combiner参数一样，将并行流中各个子进程的运行结果(accumulator函数操作后的容器A)进行合并。 Function<A, R> finisher()：函数式接口，参数为：容器A，返回类型为：collect方法最终想要的结果R。 Set<Characteristics> characteristics()：返回一个不可变的Set集合，用来表明该Collector的特征。有以下三个特征： CONCURRENT：表示此收集器支持并发。（官方文档还有其他描述，暂时没去探索，故不作过多翻译） UNORDERED：表示该收集操作不会保留流中元素原有的顺序。 IDENTITY_FINISH：表示finisher参数只是标识而已，可忽略。
+
+## Comparator
+
+- 对整数列表排序（升序）
+
+```java
+List<Integer> list = Arrays.asList(1, 4, 2, 6, 2, 8);
+list.sort(Comparator.naturalOrder());
+System.out.println(list);
+```
+
+- 对整数列表排序（降序）
+
+```java
+List<Integer> list = Arrays.asList(1, 4, 2, 6, 2, 8);
+list.sort(Comparator.reverseOrder());
+System.out.println(list);
+```
+
+- 根据对象属性（年龄）进行排序
+
+```java
+public class Test {
+    public static void main(String[] args) {
+        List<Person> personList = new ArrayList<>();
+        personList.add(new Person("a", 2));
+        personList.add(new Person("b", 4));
+        personList.add(new Person("c", 7));
+        // 升序
+        personList.sort(Comparator.comparingInt(Person::getAge));
+        // 降序
+        personList.sort(Comparator.comparingInt(Person::getAge).reversed());
+        System.out.println(personList);
+    }
+}
+```
+
+- 根据对象属性（价格、速度）进行排序，需要注意的是，**排序有先后之分，不同的顺序会导致不同的结果** 
+
+```cpp
+public class Test {
+    public static void main(String[] args) {
+        List<Computer> list = new ArrayList<>();
+        list.add(new Computer("xiaomi",4000,6));
+        list.add(new Computer("sony",5000,4));
+        list.add(new Computer("dell",4000,5));
+        list.add(new Computer("mac",6000,8));
+        list.add(new Computer("micro",5000,6));
+        // 先以价格（升序）、后再速度（升序）
+        list.sort(Comparator.comparingInt(Computer::getPrice).thenComparingInt(Computer::getSpeed));
+        // 先以速度（降序）、后再价格（升序）
+        list.sort(Comparator.comparingInt(Computer::getSpeed).reversed().thenComparingInt(Computer::getPrice));
+        // 先以价格（降序）、后再速度（降序）
+        list.sort(Comparator.comparingInt(Computer::getPrice).thenComparingInt(Computer::getSpeed).reversed());
+        System.out.println(list);
+    }
+
+    public static class Computer {
+        private String name;
+        private Integer price;
+        private Integer speed;
+    }
+```
+
+- nullFirst、nullLast
+
+  nullFirst，返回一个对null友好的比较器，该比较器认为null小于非null，nullLast反之
+
+## JUC
+
+volatile类型，说明了多线程下的可见性，即任何一个线程的修改，在其它线程中都会被立刻看到
+
+### AtomicInteger
+
+- **有参构造函数**：从构造函数函数可以看出，数值存放在成员变量value中;
+- 成员变量value声明为volatile类型，说明了多线程下的可见性，即任何一个线程的修改，在其它线程中都会被立刻看到
+
+```java
+public AtomicInteger(int initialValue) { 
+  value = initialValue;
+}
+```
+
+------
+
+- **compareAndSet**方法（value的值通过内部this和valueOffset传递）
+- 这个方法就是最核心的CAS操作
+- 接收2个参数，一个是期望数据(expected)，一个是新数据(new)；如果atomic里面的数据和期望数据一致，则将新数据设定给atomic的数据，返回true，表明成功；否则就不设定，并返回false。
+
+```java
+public final boolean compareAndSet(int expect, int update) {
+	return unsafe.compareAndSwapInt(this, valueOffset, expect, update);
+}
+```
+
+------
+
+- **getAndSet**方法,在该方法中调用了compareAndSet方法
+- 本质是get( )操作，然后做set( )操作。尽管这2个操作都是atomic，但是他们合并在一起的时候，就不是atomic
+- 如果在执行if(compareAndSet(current,newValue)之前其它线程更改了value的值，那么导致value的值必定和current的值不同，compareAndSet执行失败，只能重新获取value的值，然后继续比较，直到成功。
+
+```java
+public final int getAndSet(int newValue) {
+    for (;;) {
+      int current = get();
+      if (compareAndSet(current, newValue))
+        return current;
+    }
+}
+```
+
+### Lock与ReentrantLock
+
+### 1、概述
+
+Java中的锁有两种，synchronized与Lock。因为使用synchronized并不需要显示地加锁与解锁，所以往往称synchronized为**隐式锁**，而使用Lock时则相反，所以一般称Lock为**显示锁**
+
+synchronized修饰方法或语句块，所有锁的获取和释放都必须出现在一个块结构中。Lock接口的实现允许锁在不同的范围内获取和释放，并支持以任何顺序获取和释放多个锁。
+
+使用synchronized修饰方法或语句时锁自动释放，Lock实现需要手动释放锁
+
+除了更灵活之外，Lock还有以下优点：
+
+- Lock 实现提供了使用 synchronized 方法和语句所没有的其他功能，包括提供了一个非块结构的获取锁尝试 `tryLock()`、一个获取可中断锁的尝试 `lockInterruptibly()` 和一个获取超时失效锁的尝试 `tryLock(long, TimeUnit)`。
+- Lock 类还可以提供与隐式监视器锁完全不同的行为和语义，如保证排序、非重入用法或死锁检测。如果某个实现提供了这样特殊的语义，则该实现必须对这些语义加以记录。
+
+**ReentrantLock是一个可重入的互斥锁。**顾名思义，“互斥锁”表示在某一时间点只能被同一线程所拥有。“可重入”表示锁可被某一线程多次获取。**当然 synchronized 也是可重入的互斥锁**
+
+当锁没有被某一线程占有时，调用 lock() 方法的线程将成功获取锁。可以使用`isHeldByCurrentThread()`和 `getHoldCount()`方法来判断当前线程是否拥有该锁。
+
+**ReentrantLock既可以是公平锁又可以是非公平锁。**当此类的构造方法 ReentrantLock(boolean fair) 接收true作为参数时，ReentrantLock就是公平锁，线程依次排队获取公平锁，即锁将被等待最长时间的线程占有。与默认情况（使用非公平锁）相比，使用公平锁的程序在多线程环境下效率比较低。而且公平锁不能保证线程调度的公平性，tryLock方法可在锁未被其他线程占用的情况下获得该锁。
+
+### 2、API
+
+**1、构造方法**
+
+```java
+//创建一个 ReentrantLock 的实例。
+ReentrantLock() 
+
+//创建一个具有给定公平策略的 ReentrantLock。  
+ReentrantLock(boolean fair) 12345
+```
+
+**2、方法摘要**
+
+```java
+int getHoldCount() 
+          //查询当前线程保持此锁的次数。
+protected  Thread   getOwner() 
+          //返回目前拥有此锁的线程，如果此锁不被任何线程拥有，则返回 null。
+protected  Collection<Thread>   getQueuedThreads() 
+          //返回一个 collection，它包含可能正等待获取此锁的线程。
+ int    getQueueLength() 
+          //返回正等待获取此锁的线程估计数。
+protected  Collection<Thread>   getWaitingThreads(Condition condition) 
+          //返回一个 collection，它包含可能正在等待与此锁相关给定条件的那些线程。
+ int    getWaitQueueLength(Condition condition) 
+          //返回等待与此锁相关的给定条件的线程估计数。
+ boolean    hasQueuedThread(Thread thread) 
+          //查询给定线程是否正在等待获取此锁。
+ boolean    hasQueuedThreads() 
+          //查询是否有些线程正在等待获取此锁。
+ boolean    hasWaiters(Condition condition) 
+          //查询是否有些线程正在等待与此锁有关的给定条件。
+ boolean    isFair() 
+          //如果此锁的公平设置为 true，则返回 true。
+ boolean    isHeldByCurrentThread() 
+          //查询当前线程是否保持此锁。
+ boolean    isLocked() 
+          //查询此锁是否由任意线程保持。
+ void   lock() 
+          //获取锁。
+ void   lockInterruptibly() 
+          //如果当前线程未被中断，则获取锁。
+ Condition  newCondition() 
+          //返回用来与此 Lock 实例一起使用的 Condition 实例。
+ String toString() 
+          //返回标识此锁及其锁定状态的字符串。
+ boolean    tryLock() 
+          //仅在调用时锁未被另一个线程保持的情况下，才获取该锁。
+ boolean    tryLock(long timeout, TimeUnit unit) 
+          //如果锁在给定等待时间内没有被另一个线程保持，且当前线程未被中断，则获取该锁。
+ void   unlock() 
+          //试图释放此锁。
+```
+
+### 3、代码
+
+**1、典型的代码**
+
+```java
+class X {
+    private final ReentrantLock lock = new ReentrantLock();
+    // ...
+
+    public void m() { 
+        lock.lock();  // block until condition holds
+        try {
+            // ... method body
+        } finally {
+            lock.unlock()
+        }
+    }
+}
+```
+
