@@ -709,6 +709,18 @@ public class Test {
 
 volatile类型，说明了多线程下的可见性，即任何一个线程的修改，在其它线程中都会被立刻看到
 
+[![raUvDI.png](https://s3.ax1x.com/2020/12/20/raUvDI.png)](https://imgchr.com/i/raUvDI)
+
+### 内存可见性
+
+ Java Memory Model (JAVA 内存模型）描述线程之间如何通过内存(memory)来进行交互。 具体说来， JVM中存在一个主存区（Main Memory或Java Heap Memory），对于所有线程进行共享，而每个线程又有自己的工作内存（Working Memory），工作内存中保存的是主存中某些变量的拷贝，线程对所有变量的操作并非发生在主存区，而是发生在工作内存中，而线程之间是不能直接相互访问，变量在程序中的传递，是依赖主存来完成的。
+
+ 如果线程1**对共享变量flag进行了修改**，但是线程1**没有及时把更新后的值刷入到主内存中**，而此时main线程从主内存读取共享变量flag的值，所以flag的值是原始值，那么我们就说对于main线程来讲，共享变量flag的更改对main线程是不可见的  
+
+[![](https://s3.ax1x.com/2020/12/20/raNzhF.png)](https://imgchr.com/i/raNzhF)
+
+
+
 ### AtomicInteger
 
 - **有参构造函数**：从构造函数函数可以看出，数值存放在成员变量value中;
